@@ -5,3 +5,4 @@ qrcode
 Pillow
 fpdf2
 reportlab
+flask
