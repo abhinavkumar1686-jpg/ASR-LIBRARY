@@ -1,0 +1,6 @@
+python-telegram-bot
+psycopg2-binary
+qrcode
+Pillow
+fpdf2
+python-dotenv
