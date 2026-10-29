@@ -1,6 +1,7 @@
-python-telegram-bot
+python-telegram-bot[job-queue]
+python-dotenv
 psycopg2-binary
 qrcode
 Pillow
 fpdf2
-python-dotenv
+reportlab
