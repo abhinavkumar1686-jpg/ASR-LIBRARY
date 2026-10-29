@@ -1,16 +1,8 @@
 import os
 import threading
 from flask import Flask
-from datetime import date, datetime, timezone, timedelta, time
-from pathlib import Path
-from decimal import Decimal, InvalidOperation
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, 
-    ContextTypes, ConversationHandler, MessageHandler, filters
-)
 
-# 🚨 Flask सर्वर सेटअप (Render के लिए)
+# 🚨 Flask सर्वर सेटअप
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
@@ -18,8 +10,9 @@ def home():
     return "ASR Library Bot is running!"
 
 def run_web_server():
+    # 🚨 Render अपना पोर्ट 'PORT' में देता है, उसे ही इस्तेमाल करें
     port = int(os.environ.get("PORT", 8080))
-    # 🚨 ध्यान दें: यहाँ app.run नहीं, बल्कि flask_app.run होगा
+    # 🚨 host 0.0.0.0 होना बहुत ज़रूरी है, localhost नहीं
     flask_app.run(host="0.0.0.0", port=port)
 import os
 from datetime import date, datetime, timezone, timedelta, time
@@ -1338,63 +1331,24 @@ def main():
     create_tables()
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # 🚨 1. Flask सर्वर को बैकग्राउंड में चालू करें (सिर्फ 1 बार)
+    # 🚨 1. Flask सर्वर को बैकग्राउंड में चालू करें (Render के लिए)
     threading.Thread(target=run_web_server, daemon=True).start()
     
     job_queue = app.job_queue
 
-    # 🚨 2. आपके सारे टाइमर और जॉब्स (जो पहले से थे)
+    # 🚨 2. आपके सारे टाइमर और जॉब्स
     reminder_time = time(hour=10, minute=0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
     job_queue.run_daily(daily_reminder_job, time=reminder_time)
     job_queue.run_repeating(check_pending_timeouts, interval=60, first=10)
     job_queue.run_repeating(notify_and_expire_active_bookings, interval=3600, first=10)
 
-    # 🚨 3. आपके सारे हैंडलर्स (जो पहले से थे)
+    # 🚨 3. सारे हैंडलर्स
     reg_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={WAITING_FOR_CONTACT: [MessageHandler(filters.CONTACT, contact_received)]},
         fallbacks=[CommandHandler("start", start)]
     )
-    conv_handler = ConversationHandler(
-        entry_points=[
-            MessageHandler(filters.Regex("^📅 Book a Seat$"), book_seat_start),
-            MessageHandler(filters.Regex("^💳 Pay Fees$"), pay_fees_handler),
-            CallbackQueryHandler(renew_selected, pattern="^renew_"),
-            CallbackQueryHandler(handle_waitlist, pattern="^waitlist_")
-        ],
-        states={
-            CHOOSING_SHIFT: [CallbackQueryHandler(shift_selected, pattern="^shift_")],
-            CHOOSING_SEAT: [CallbackQueryHandler(seat_selected, pattern="^(seat_|ignore)")],
-            WAITING_FOR_PROOF: [MessageHandler((filters.PHOTO | filters.TEXT) & ~filters.COMMAND, proof_received)],
-        },
-        fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
-    )
-
-    app.add_handler(reg_conv)
-    app.add_handler(CommandHandler("ban", ban_command))
-    app.add_handler(CommandHandler("unban", unban_command))
-    app.add_handler(CommandHandler("revenue", revenue_command))
-    app.add_handler(CommandHandler("userinfo", userinfo_command))
-    app.add_handler(CommandHandler("broadcast", broadcast_command))
-    app.add_handler(CommandHandler("bookon", book_on_behalf_command))
-    app.add_handler(conv_handler)
-    app.add_handler(MessageHandler(filters.Regex("^🪑 View Available Seats$"), view_seats_handler))
-    app.add_handler(MessageHandler(filters.Regex("^📄 My Booking$"), my_booking_handler))
-    app.add_handler(CallbackQueryHandler(view_shift_selected, pattern="^viewshift_"))
-    app.add_handler(CallbackQueryHandler(admin_approve, pattern="^(approve_|reject_)"))
-
-    # 🚨 4. बॉट स्टार्ट करें (सिर्फ 1 बार)
-    print("बॉट चालू हो गया है...")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
     
-    reg_conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={WAITING_FOR_CONTACT: [MessageHandler(filters.CONTACT, contact_received)]},
-        fallbacks=[CommandHandler("start", start)]
-    )
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("^📅 Book a Seat$"), book_seat_start),
@@ -1406,7 +1360,7 @@ if __name__ == "__main__":
             CHOOSING_SHIFT: [CallbackQueryHandler(shift_selected, pattern="^shift_")],
             CHOOSING_SEAT: [CallbackQueryHandler(seat_selected, pattern="^(seat_|ignore)")],
             WAITING_FOR_PROOF: [MessageHandler((filters.PHOTO | filters.TEXT) & ~filters.COMMAND, proof_received)],
-            # 🚨 नया स्टेट यहाँ जोड़ें
+            # 🚨 यहाँ WAITLIST_SEAT जोड़ना बहुत ज़रूरी था
             WAITLIST_SEAT: [
                 CallbackQueryHandler(wl_seat_toggle, pattern="^wlseat_"),
                 CallbackQueryHandler(wl_confirm, pattern="^wlconfirm$"),
@@ -1415,6 +1369,8 @@ if __name__ == "__main__":
         },
         fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
     )
+
+    # 🚨 सारे हैंडलर्स को रजिस्टर करें
     app.add_handler(reg_conv)
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("unban", unban_command))
@@ -1422,14 +1378,18 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("userinfo", userinfo_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(CommandHandler("bookon", book_on_behalf_command))
+    
     app.add_handler(conv_handler)
+    
     app.add_handler(MessageHandler(filters.Regex("^🪑 View Available Seats$"), view_seats_handler))
     app.add_handler(MessageHandler(filters.Regex("^📄 My Booking$"), my_booking_handler))
-    app.add_handler(CallbackQueryHandler(view_shift_selected, pattern="^viewshift_"))
-    app.add_handler(CallbackQueryHandler(admin_approve, pattern="^(approve_|reject_)"))
-    # नए बटन्स के हैंडलर्स
     app.add_handler(MessageHandler(filters.Regex("^❓ Help & FAQ$"), help_faq_handler))
     app.add_handler(MessageHandler(filters.Regex("^⏳ Join Waitlist$"), waitlist_menu_handler))
+    
+    app.add_handler(CallbackQueryHandler(view_shift_selected, pattern="^viewshift_"))
+    app.add_handler(CallbackQueryHandler(admin_approve, pattern="^(approve_|reject_)"))
+
+    # 🚨 4. बॉट स्टार्ट करें (सिर्फ 1 बार)
     print("बॉट चालू हो गया है...")
     app.run_polling(drop_pending_updates=True)
 
